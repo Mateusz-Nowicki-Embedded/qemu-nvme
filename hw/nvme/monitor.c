@@ -7,8 +7,11 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qapi/qapi-commands-machine.h"
+#include "qobject/qdict.h"
 #include "qapi/type-helpers.h"
 #include "hw/pci/pci.h"
+#include "monitor/hmp.h"
+#include "monitor/monitor.h"
 
 #include "nvme.h"
 
@@ -136,4 +139,68 @@ HumanReadableText *qmp_x_query_nvme_queues(Error **errp)
     }
 
     return human_readable_text_from_str(buf);
+}
+
+typedef struct SetSqDelayCtx {
+    uint32_t sqid;
+    int64_t  delay_ns;
+    unsigned matched;
+} SetSqDelayCtx;
+
+static int set_sq_delay_one(Object *obj, void *opaque)
+{
+    SetSqDelayCtx *ctx = opaque;
+    NvmeCtrl *n;
+    NvmeSQueue *sq;
+
+    if (!object_dynamic_cast(obj, TYPE_NVME)) {
+        return 0;
+    }
+    n = NVME(obj);
+
+    if (ctx->sqid > n->params.max_ioqpairs) {
+        return 0;
+    }
+    sq = n->sq ? n->sq[ctx->sqid] : NULL;
+    if (!sq) {
+        return 0;
+    }
+
+    sq->delay_ns = ctx->delay_ns;
+    ctx->matched++;
+    return 0;
+}
+
+void hmp_nvme_completion_delay(Monitor *mon, const QDict *qdict)
+{
+    int64_t sqid = qdict_get_int(qdict, "sqid");
+    int64_t delay_ms = qdict_get_int(qdict, "delay_ms");
+    SetSqDelayCtx ctx;
+
+    if (sqid < 0 || sqid > UINT16_MAX) {
+        monitor_printf(mon, "sqid %" PRId64 " out of range\n", sqid);
+        return;
+    }
+    if (delay_ms < 0) {
+        monitor_printf(mon, "delay_ms must be >= 0\n");
+        return;
+    }
+
+    ctx.sqid = sqid;
+    ctx.delay_ns = delay_ms * 1000000LL;
+    ctx.matched = 0;
+
+    object_child_foreach_recursive(object_get_root(),
+                                   set_sq_delay_one, &ctx);
+
+    if (ctx.matched == 0) {
+        monitor_printf(mon, "no NVMe SQ with sqid=%" PRId64 " found\n",
+                       sqid);
+        return;
+    }
+
+    monitor_printf(mon,
+                   "nvme_completion_delay: sqid=%" PRId64
+                   " delay_ms=%" PRId64 "\n",
+                   sqid, delay_ms);
 }

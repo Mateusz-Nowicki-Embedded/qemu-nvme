@@ -199,6 +199,7 @@
 #include "qemu/log.h"
 #include "qemu/units.h"
 #include "qemu/range.h"
+#include "qemu/timer.h"
 #include "qapi/error.h"
 #include "qapi/visitor.h"
 #include "system/system.h"
@@ -1502,6 +1503,8 @@ static void nvme_post_cqes(void *opaque)
     NvmeRequest *req, *next;
     bool pending = cq->head != cq->tail;
     uint32_t tail_at_entry = cq->tail;
+    int64_t now_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+    int64_t next_wake_ns = 0;
     int ret;
 
     QTAILQ_FOREACH_SAFE(req, &cq->req_list, entry, next) {
@@ -1518,6 +1521,18 @@ static void nvme_post_cqes(void *opaque)
         }
 
         sq = req->sq;
+
+        if (sq->delay_ns) {
+            int64_t deadline = req->timestamp_ns + sq->delay_ns;
+
+            if (now_ns < deadline) {
+                if (!next_wake_ns || deadline < next_wake_ns) {
+                    next_wake_ns = deadline;
+                }
+                continue;
+            }
+        }
+
         req->cqe.status = cpu_to_le16((req->status << 1) | cq->phase);
         req->cqe.sq_id = cpu_to_le16(sq->sqid);
         req->cqe.sq_head = cpu_to_le16(sq->head);
@@ -1542,6 +1557,9 @@ static void nvme_post_cqes(void *opaque)
 
         QTAILQ_INSERT_TAIL(&sq->req_list, req, entry);
     }
+    if (next_wake_ns) {
+        timer_mod_ns(cq->delay_timer, next_wake_ns);
+    }
     if (cq->tail != cq->head && cq->tail != tail_at_entry) {
         if (cq->irq_enabled && !pending) {
             n->cq_pending++;
@@ -1563,6 +1581,8 @@ static void nvme_enqueue_req_completion(NvmeCQueue *cq, NvmeRequest *req)
         trace_pci_nvme_err_req_status(nvme_cid(req), nvme_nsid(req->ns),
                                       req->status, req->cmd.opcode);
     }
+
+    req->timestamp_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
 
     QTAILQ_REMOVE(&req->sq->out_req_list, req, entry);
     QTAILQ_INSERT_TAIL(&cq->req_list, req, entry);
@@ -4864,6 +4884,7 @@ static void nvme_init_sq(NvmeSQueue *sq, NvmeCtrl *n, uint64_t dma_addr,
     sq->size = size;
     sq->cqid = cqid;
     sq->head = sq->tail = 0;
+    sq->delay_ns = 0;
     sq->io_req = g_new0(NvmeRequest, sq->size);
 
     QTAILQ_INIT(&sq->req_list);
@@ -5505,12 +5526,20 @@ static uint16_t nvme_get_log(NvmeCtrl *n, NvmeRequest *req)
     }
 }
 
+static void nvme_cq_delay_timer_cb(void *opaque)
+{
+    NvmeCQueue *cq = opaque;
+
+    qemu_bh_schedule(cq->bh);
+}
+
 static void nvme_free_cq(NvmeCQueue *cq, NvmeCtrl *n)
 {
     PCIDevice *pci = PCI_DEVICE(n);
     uint16_t offset = (cq->cqid << 3) + (1 << 2);
 
     n->cq[cq->cqid] = NULL;
+    timer_free(cq->delay_timer);
     qemu_bh_delete(cq->bh);
     if (cq->ioeventfd_enabled) {
         memory_region_del_eventfd(&n->iomem,
@@ -5586,6 +5615,8 @@ static void nvme_init_cq(NvmeCQueue *cq, NvmeCtrl *n, uint64_t dma_addr,
     n->cq[cqid] = cq;
     cq->bh = qemu_bh_new_guarded(nvme_post_cqes, cq,
                                  &DEVICE(cq->ctrl)->mem_reentrancy_guard);
+    cq->delay_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL,
+                                   nvme_cq_delay_timer_cb, cq);
 }
 
 static uint16_t nvme_create_cq(NvmeCtrl *n, NvmeRequest *req)

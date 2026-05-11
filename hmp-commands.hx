@@ -1503,6 +1503,21 @@ SRST
 ERST
 
     {
+        .name       = "nvme_completion_delay",
+        .args_type  = "sqid:i,delay_ms:i",
+        .params     = "sqid delay_ms",
+        .help       = "set artificial completion delay (ms) for an NVMe SQ",
+        .cmd        = hmp_nvme_completion_delay,
+    },
+
+SRST
+``nvme_completion_delay`` *sqid* *delay_ms*
+  Hold each completion for commands submitted on the NVMe SQ with the given
+  *sqid* until at least *delay_ms* milliseconds have elapsed since the
+  command finished executing.  ``0`` disables the delay.
+ERST
+
+    {
         .name       = "mce",
         .args_type  = "broadcast:-b,cpu_index:i,bank:i,status:l,mcg_status:l,addr:l,misc:l",
         .params     = "[-b] cpu bank status mcgstatus addr misc",

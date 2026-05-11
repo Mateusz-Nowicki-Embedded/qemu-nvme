@@ -443,6 +443,7 @@ typedef struct NvmeRequest {
     BlockAcctCookie         acct;
     NvmeSg                  sg;
     bool                    atomic_write;
+    int64_t                 timestamp_ns;
     QTAILQ_ENTRY(NvmeRequest)entry;
 } NvmeRequest;
 
@@ -511,6 +512,7 @@ typedef struct NvmeSQueue {
     QEMUBH      *bh;
     EventNotifier notifier;
     bool        ioeventfd_enabled;
+    int64_t     delay_ns;
     NvmeRequest *io_req;
     QTAILQ_HEAD(, NvmeRequest) req_list;
     QTAILQ_HEAD(, NvmeRequest) out_req_list;
@@ -530,6 +532,7 @@ typedef struct NvmeCQueue {
     uint64_t    db_addr;
     uint64_t    ei_addr;
     QEMUBH      *bh;
+    QEMUTimer   *delay_timer;
     EventNotifier notifier;
     bool        ioeventfd_enabled;
     QTAILQ_HEAD(, NvmeSQueue) sq_list;
