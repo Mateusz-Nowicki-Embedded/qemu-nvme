@@ -1501,6 +1501,7 @@ static void nvme_post_cqes(void *opaque)
     NvmeCtrl *n = cq->ctrl;
     NvmeRequest *req, *next;
     bool pending = cq->head != cq->tail;
+    uint32_t tail_at_entry = cq->tail;
     int ret;
 
     QTAILQ_FOREACH_SAFE(req, &cq->req_list, entry, next) {
@@ -1541,7 +1542,7 @@ static void nvme_post_cqes(void *opaque)
 
         QTAILQ_INSERT_TAIL(&sq->req_list, req, entry);
     }
-    if (cq->tail != cq->head) {
+    if (cq->tail != cq->head && cq->tail != tail_at_entry) {
         if (cq->irq_enabled && !pending) {
             n->cq_pending++;
         }
