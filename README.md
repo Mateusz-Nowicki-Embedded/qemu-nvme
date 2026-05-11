@@ -39,3 +39,27 @@ without attaching gdb to QEMU.
   SQ 4  size=1024  head=16    tail=16    cqid=4    prp1=0x000000007e060000  SQTDBL=BAR0+0x1020
   CQ 4  size=1024  head=16    tail=16    iv=4      prp1=0x000000007e070000  CQHDBL=BAR0+0x1024  phaseTag=0
 ```
+
+## TODO
+
+Ideas to make controller reset paths properly testable from a driver
+perspective.
+
+* **NSSR (NVM Subsystem Reset) support.** Today QEMU only logs a
+  `LOG_GUEST_ERROR` when the host writes the NSSR magic value
+  (`0x4e564d65`) to the NSSR register (`hw/nvme/ctrl.c`, NVME_REG_NSSR
+  case in `nvme_write_bar`). A real subsystem reset should tear down all
+  controllers in the subsystem, not just the one being written to.
+  Useful for exercising driver-side subsystem-reset recovery code.
+
+* **Posting completions during controller reset.** On CC.EN 1→0 the
+  spec allows the controller to post outstanding CQEs before clearing
+  CSTS.RDY — including with status `Successful Completion` for commands
+  that actually finished (e.g. AIO callbacks fired during the implicit
+  drain). QEMU currently drops `cq->req_list` silently when freeing the
+  CQ. Adding an opt-in `reset_flush_completions=on` device parameter
+  that flushes pending CQEs (with their real status, not synthesised
+  abort) between `nvme_ns_drain` and `nvme_free_cq` would let drivers
+  exercise the "late completion during reset window" path that real
+  hardware sometimes takes.
+
