@@ -99,6 +99,60 @@ To clear:
 backing `QEMUTimer` is freed; re-apply with `nvme_completion_delay`
 once the controller is re-enabled and the I/O queues are re-created.
 
+## `nvme_parse_sq_entry` HMP command
+
+Read a single Submission Queue Entry from guest physical memory and
+print every NVMe spec field on its own line. Saves typing
+`xp/16wx <prp1>+(slot*64)` followed by manual byte decoding.
+
+```
+(qemu) nvme_parse_sq_entry <sqid> <slot> [<name>]
+```
+
+* *sqid* — Submission Queue ID. `0` is the admin queue.
+* *slot* — index into the SQ ring, `0 .. (sq->size - 1)`. Slot
+  numbers come from the SQ ring layout, not from the doorbell
+  head/tail counters (which may have wrapped).
+* *name* — optional controller, defaults to `nvme0`. Same mapping as
+  `info nvme [name]`.
+
+The opcode is shown together with its `NVME_*_CMD_*` enum name
+(admin enum for `sqid == 0`, NVM I/O enum otherwise). The flags
+byte breakdown exposes FUSE, the reserved 4-bit field, and PSDT
+separately, so anything non-zero in the reserved bits is visible.
+The rest of the SQE (CDWs, MPTR, PRP1/PRP2) is rendered as raw
+hexadecimal — no opcode-specific decoding yet.
+
+Example: dump admin SQ slot 3 on `nvme0` after the kernel issued
+an Identify Controller from a `nvme id-ctrl /dev/nvme0` invocation:
+
+```
+(qemu) nvme_parse_sq_entry 0 3
+/machine/peripheral/nvme0 SQ 0 slot 3 @ 0x000000000a4dc0c0
+  opcode  = 0x06 (NVME_ADM_CMD_IDENTIFY)
+  flags   = 0x00  (FUSE=0, RSV=0, PSDT=0)
+  CID     = 0x301d
+  NSID    = 0x00000000
+  CDW2/3  = 0x0000000000000000
+  MPTR    = 0x0000000000000000
+  PRP1    = 0x000000003fd02000
+  PRP2    = 0x0000000000000000
+  CDW10   = 0x00000001
+  CDW11   = 0x00000000
+  CDW12   = 0x00000000
+  CDW13   = 0x00000000
+  CDW14   = 0x00000000
+  CDW15   = 0x00000000
+```
+
+CDW10 = `0x01` here decodes (per spec) to CNS=1 (Identify Controller);
+the parser leaves the spec-level decoding to the reader for now.
+
+The SQE is fetched via DMA from `sq->dma_addr + slot * 64`. The
+contents reflect whatever is currently written in guest memory at
+that slot, including stale bytes left over from previously fetched
+commands.
+
 ## TODO
 
 Ideas to make controller reset paths properly testable from a driver
