@@ -72,6 +72,7 @@ void hmp_system_wakeup(Monitor *mon, const QDict *qdict);
 void hmp_nmi(Monitor *mon, const QDict *qdict);
 void hmp_nvme_completion_delay(Monitor *mon, const QDict *qdict);
 void hmp_nvme_parse_sq_entry(Monitor *mon, const QDict *qdict);
+void hmp_nvme_parse_cq_entry(Monitor *mon, const QDict *qdict);
 void hmp_info_nvme(Monitor *mon, const QDict *qdict);
 void hmp_info_nvme_queues(Monitor *mon, const QDict *qdict);
 void hmp_info_network(Monitor *mon, const QDict *qdict);

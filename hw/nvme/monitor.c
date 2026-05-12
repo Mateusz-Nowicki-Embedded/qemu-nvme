@@ -372,3 +372,105 @@ void hmp_nvme_parse_sq_entry(Monitor *mon, const QDict *qdict)
     monitor_printf(mon, "  CDW14   = 0x%08x\n", le32_to_cpu(cmd.cdw14));
     monitor_printf(mon, "  CDW15   = 0x%08x\n", le32_to_cpu(cmd.cdw15));
 }
+
+static const char *nvme_sct_str(uint8_t sct)
+{
+    switch (sct) {
+    case 0x0: return "Generic Command Status";
+    case 0x1: return "Command Specific Status";
+    case 0x2: return "Media and Data Integrity Errors";
+    case 0x3: return "Path Related Status";
+    case 0x7: return "Vendor Specific";
+    default:  return "Reserved";
+    }
+}
+
+void hmp_nvme_parse_cq_entry(Monitor *mon, const QDict *qdict)
+{
+    int64_t cqid = qdict_get_int(qdict, "cqid");
+    int64_t slot = qdict_get_int(qdict, "slot");
+    const char *name = qdict_get_try_str(qdict, "name");
+    g_autofree char *path = nvme_canonical_path(name ? name : "nvme0");
+    Object *obj;
+    NvmeCtrl *n;
+    NvmeCQueue *cq;
+    NvmeCqe cqe;
+    hwaddr addr;
+    uint32_t dw2, dw3;
+    uint16_t status;
+    uint8_t phase, sc, sct, crd, m, dnr;
+
+    if (cqid < 0 || cqid > UINT16_MAX) {
+        monitor_printf(mon, "cqid %" PRId64 " out of range\n", cqid);
+        return;
+    }
+    if (slot < 0) {
+        monitor_printf(mon, "slot must be >= 0\n");
+        return;
+    }
+
+    obj = object_resolve_path(path, NULL);
+    if (!obj || !object_dynamic_cast(obj, TYPE_NVME)) {
+        monitor_printf(mon, "no NVMe controller at %s\n", path);
+        return;
+    }
+    n = NVME(obj);
+
+    if (cqid > n->params.max_ioqpairs) {
+        monitor_printf(mon, "cqid %" PRId64 " out of range for %s\n",
+                       cqid, path);
+        return;
+    }
+    cq = n->cq ? n->cq[cqid] : NULL;
+    if (!cq) {
+        monitor_printf(mon, "no NVMe CQ with cqid=%" PRId64 " at %s\n",
+                       cqid, path);
+        return;
+    }
+    if ((uint64_t)slot >= cq->size) {
+        monitor_printf(mon, "slot %" PRId64 " out of range (cq size %u)\n",
+                       slot, cq->size);
+        return;
+    }
+
+    addr = cq->dma_addr + slot * sizeof(NvmeCqe);
+    if (pci_dma_read(PCI_DEVICE(n), addr, &cqe, sizeof(cqe))) {
+        monitor_printf(mon, "DMA read failed at 0x%016" HWADDR_PRIx "\n",
+                       addr);
+        return;
+    }
+
+    status = le16_to_cpu(cqe.status);
+    phase  = status & 0x1;
+    sc     = (status >> 1)  & 0xff;
+    sct    = (status >> 9)  & 0x7;
+    crd    = (status >> 12) & 0x3;
+    m      = (status >> 14) & 0x1;
+    dnr    = (status >> 15) & 0x1;
+
+    dw2 = ((uint32_t)le16_to_cpu(cqe.sq_id) << 16) |
+          le16_to_cpu(cqe.sq_head);
+    dw3 = ((uint32_t)status << 16) | le16_to_cpu(cqe.cid);
+
+    monitor_printf(mon,
+                   "%s CQ %" PRId64 " slot %" PRId64
+                   " @ 0x%016" HWADDR_PRIx "\n",
+                   path, cqid, slot, addr);
+    monitor_printf(mon, "  DW0 = 0x%08x\n", le32_to_cpu(cqe.result));
+    monitor_printf(mon, "  DW1 = 0x%08x\n", le32_to_cpu(cqe.dw1));
+    monitor_printf(mon, "  DW2 = 0x%08x\n", dw2);
+    monitor_printf(mon, "    SQ head = 0x%04x\n", le16_to_cpu(cqe.sq_head));
+    monitor_printf(mon, "    SQ id   = 0x%04x\n", le16_to_cpu(cqe.sq_id));
+    if (sct == 0 && sc == 0) {
+        monitor_printf(mon, "  DW3 = 0x%08x  (Successful Completion)\n", dw3);
+    } else {
+        monitor_printf(mon, "  DW3 = 0x%08x\n", dw3);
+    }
+    monitor_printf(mon, "    CID = 0x%04x\n", le16_to_cpu(cqe.cid));
+    monitor_printf(mon, "    P   = %u\n", phase);
+    monitor_printf(mon, "    SC  = 0x%02x\n", sc);
+    monitor_printf(mon, "    SCT = 0x%x  (%s)\n", sct, nvme_sct_str(sct));
+    monitor_printf(mon, "    CRD = %u\n", crd);
+    monitor_printf(mon, "    M   = %u\n", m);
+    monitor_printf(mon, "    DNR = %u\n", dnr);
+}

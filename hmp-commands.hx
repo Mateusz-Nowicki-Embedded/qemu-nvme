@@ -1543,6 +1543,27 @@ SRST
 ERST
 
     {
+        .name       = "nvme_parse_cq_entry",
+        .args_type  = "cqid:i,slot:i,name:s?",
+        .params     = "cqid slot [name]",
+        .help       = "dump an NVMe CQE from guest memory with each field "
+                      "parsed (raw values + status breakdown); [name] "
+                      "selects a controller (default: nvme0)",
+        .cmd        = hmp_nvme_parse_cq_entry,
+    },
+
+SRST
+``nvme_parse_cq_entry`` *cqid* *slot* [*name*]
+  Read a single Completion Queue Entry from guest physical memory at
+  ``cq->dma_addr + slot * 16`` on the given NVMe controller and print
+  every NVMe spec field separately.  The 16-bit status word is broken
+  down into Phase, SC, SCT (with type name), CRD, M and DNR bits; the
+  rest of the CQE (DW0, DW1, SQ head, SQ id, CID) is rendered as raw
+  hexadecimal.  Optional *name* selects which controller; it defaults to
+  ``nvme0``.  Same name mapping as the other ``nvme_*`` commands.
+ERST
+
+    {
         .name       = "mce",
         .args_type  = "broadcast:-b,cpu_index:i,bank:i,status:l,mcg_status:l,addr:l,misc:l",
         .params     = "[-b] cpu bank status mcgstatus addr misc",
