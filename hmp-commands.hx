@@ -1523,6 +1523,26 @@ SRST
 ERST
 
     {
+        .name       = "nvme_parse_sq_entry",
+        .args_type  = "sqid:i,slot:i,name:s?",
+        .params     = "sqid slot [name]",
+        .help       = "dump an NVMe SQE from guest memory with each field "
+                      "parsed (raw values); [name] selects a controller "
+                      "(default: nvme0)",
+        .cmd        = hmp_nvme_parse_sq_entry,
+    },
+
+SRST
+``nvme_parse_sq_entry`` *sqid* *slot* [*name*]
+  Read a single Submission Queue Entry from guest physical memory at
+  ``sq->dma_addr + slot * 64`` on the given NVMe controller and print
+  every NVMe spec field separately.  Values are reported as raw
+  hexadecimal (no opcode/CNS-style human interpretation yet).  Optional
+  *name* selects which controller; it defaults to ``nvme0``.  Same name
+  mapping as the other ``nvme_*`` commands.
+ERST
+
+    {
         .name       = "mce",
         .args_type  = "broadcast:-b,cpu_index:i,bank:i,status:l,mcg_status:l,addr:l,misc:l",
         .params     = "[-b] cpu bank status mcgstatus addr misc",

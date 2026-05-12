@@ -288,3 +288,87 @@ void hmp_info_nvme_queues(Monitor *mon, const QDict *qdict)
     }
     monitor_puts(mon, info->human_readable_text);
 }
+
+void hmp_nvme_parse_sq_entry(Monitor *mon, const QDict *qdict)
+{
+    int64_t sqid = qdict_get_int(qdict, "sqid");
+    int64_t slot = qdict_get_int(qdict, "slot");
+    const char *name = qdict_get_try_str(qdict, "name");
+    g_autofree char *path = nvme_canonical_path(name ? name : "nvme0");
+    Object *obj;
+    NvmeCtrl *n;
+    NvmeSQueue *sq;
+    NvmeCmd cmd;
+    hwaddr addr;
+
+    if (sqid < 0 || sqid > UINT16_MAX) {
+        monitor_printf(mon, "sqid %" PRId64 " out of range\n", sqid);
+        return;
+    }
+    if (slot < 0) {
+        monitor_printf(mon, "slot must be >= 0\n");
+        return;
+    }
+
+    obj = object_resolve_path(path, NULL);
+    if (!obj || !object_dynamic_cast(obj, TYPE_NVME)) {
+        monitor_printf(mon, "no NVMe controller at %s\n", path);
+        return;
+    }
+    n = NVME(obj);
+
+    if (sqid > n->params.max_ioqpairs) {
+        monitor_printf(mon, "sqid %" PRId64 " out of range for %s\n",
+                       sqid, path);
+        return;
+    }
+    sq = n->sq ? n->sq[sqid] : NULL;
+    if (!sq) {
+        monitor_printf(mon, "no NVMe SQ with sqid=%" PRId64 " at %s\n",
+                       sqid, path);
+        return;
+    }
+    if ((uint64_t)slot >= sq->size) {
+        monitor_printf(mon, "slot %" PRId64 " out of range (sq size %u)\n",
+                       slot, sq->size);
+        return;
+    }
+
+    addr = sq->dma_addr + slot * sizeof(NvmeCmd);
+    if (pci_dma_read(PCI_DEVICE(n), addr, &cmd, sizeof(cmd))) {
+        monitor_printf(mon, "DMA read failed at 0x%016" HWADDR_PRIx "\n",
+                       addr);
+        return;
+    }
+
+    monitor_printf(mon,
+                   "%s SQ %" PRId64 " slot %" PRId64
+                   " @ 0x%016" HWADDR_PRIx "\n",
+                   path, sqid, slot, addr);
+    monitor_printf(mon, "  opcode  = 0x%02x (%s)\n",
+                   cmd.opcode,
+                   sqid == 0 ? nvme_adm_opc_str(cmd.opcode)
+                             : nvme_io_opc_str(cmd.opcode));
+    monitor_printf(mon,
+                   "  flags   = 0x%02x  (FUSE=%u, RSV=%u, PSDT=%u)\n",
+                   cmd.flags,
+                   NVME_CMD_FLAGS_FUSE(cmd.flags),
+                   (cmd.flags >> 2) & 0x0f,
+                   NVME_CMD_FLAGS_PSDT(cmd.flags));
+    monitor_printf(mon, "  CID     = 0x%04x\n", le16_to_cpu(cmd.cid));
+    monitor_printf(mon, "  NSID    = 0x%08x\n", le32_to_cpu(cmd.nsid));
+    monitor_printf(mon, "  CDW2/3  = 0x%016" PRIx64 "\n",
+                   le64_to_cpu(cmd.res1));
+    monitor_printf(mon, "  MPTR    = 0x%016" PRIx64 "\n",
+                   le64_to_cpu(cmd.mptr));
+    monitor_printf(mon, "  PRP1    = 0x%016" PRIx64 "\n",
+                   le64_to_cpu(cmd.dptr.prp1));
+    monitor_printf(mon, "  PRP2    = 0x%016" PRIx64 "\n",
+                   le64_to_cpu(cmd.dptr.prp2));
+    monitor_printf(mon, "  CDW10   = 0x%08x\n", le32_to_cpu(cmd.cdw10));
+    monitor_printf(mon, "  CDW11   = 0x%08x\n", le32_to_cpu(cmd.cdw11));
+    monitor_printf(mon, "  CDW12   = 0x%08x\n", le32_to_cpu(cmd.cdw12));
+    monitor_printf(mon, "  CDW13   = 0x%08x\n", le32_to_cpu(cmd.cdw13));
+    monitor_printf(mon, "  CDW14   = 0x%08x\n", le32_to_cpu(cmd.cdw14));
+    monitor_printf(mon, "  CDW15   = 0x%08x\n", le32_to_cpu(cmd.cdw15));
+}
