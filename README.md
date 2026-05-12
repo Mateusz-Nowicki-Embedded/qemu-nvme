@@ -153,6 +153,72 @@ contents reflect whatever is currently written in guest memory at
 that slot, including stale bytes left over from previously fetched
 commands.
 
+## `nvme_parse_cq_entry` HMP command
+
+Mirror of `nvme_parse_sq_entry` for the completion side. Reads a
+single Completion Queue Entry from guest physical memory and prints
+each NVMe spec field separately, with the 16-bit status word broken
+down into its sub-fields.
+
+```
+(qemu) nvme_parse_cq_entry <cqid> <slot> [<name>]
+```
+
+* *cqid* — Completion Queue ID. `0` is the admin queue. I/O CQ IDs
+  start at `1`; use `info nvme-queues` to see what is currently
+  allocated.
+* *slot* — index into the CQ ring, `0 .. (cq->size - 1)`. As with
+  the SQ parser, slot numbers come from the ring layout rather than
+  from the doorbell head/tail counters (which may have wrapped).
+* *name* — optional controller, defaults to `nvme0`. Same mapping as
+  `info nvme [name]`.
+
+The four CQE DWords are printed as raw 32-bit values, with the
+packed DWords also expanded into their sub-fields.  DW2 holds the
+SQ head pointer (low 16 bits) and SQ Identifier (high 16 bits).
+DW3 holds the Command Identifier (low 16 bits) and the 16-bit
+status field (high 16 bits); the status field is decoded as:
+
+* `P` — Phase tag (DW3 bit 16).
+* `SC` — Status Code (DW3 bits [24:17]).
+* `SCT` — Status Code Type (DW3 bits [27:25]), shown with its spec
+  name (`Generic Command Status`, `Command Specific Status`, `Media
+  and Data Integrity Errors`, `Path Related Status`, `Vendor
+  Specific`).
+* `CRD` — Command Retry Delay (DW3 bits [29:28]).
+* `M` — More (DW3 bit 30).
+* `DNR` — Do Not Retry (DW3 bit 31).
+
+For the common case of `SCT == 0 && SC == 0` the `DW3` line also
+notes `(Successful Completion)`.  SC values are *not* otherwise
+decoded — the full per-SCT name table is left to the reader.
+
+Example: dump admin CQ slot 3 after a successful Identify
+Controller completion:
+
+```
+(qemu) nvme_parse_cq_entry 0 3
+/machine/peripheral/nvme0 CQ 0 slot 3 @ 0x000000000a4dd030
+  DW0 = 0x00000000
+  DW1 = 0x00000000
+  DW2 = 0x00000004
+    SQ head = 0x0004
+    SQ id   = 0x0000
+  DW3 = 0x0001301d  (Successful Completion)
+    CID = 0x301d
+    P   = 1
+    SC  = 0x00
+    SCT = 0x0  (Generic Command Status)
+    CRD = 0
+    M   = 0
+    DNR = 0
+```
+
+The CQE is fetched via DMA from `cq->dma_addr + slot * 16`. As with
+the SQ parser, the contents reflect whatever is currently written in
+guest memory at that slot, including stale bytes left over from
+previously posted completions.
+
 ## TODO
 
 Ideas to make controller reset paths properly testable from a driver
