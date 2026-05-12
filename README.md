@@ -61,9 +61,10 @@ controller finished executing it.
   allocated.
 * *delay_ms* — delay in milliseconds. `0` disables the delay on that
   SQ.
-* *name* — optional controller name (e.g. `nvme0`). When omitted, the
-  setting is applied to **every** NVMe controller in the machine.
-  Same name mapping as `info nvme [name]`.
+* *name* — optional controller name (e.g. `nvme0`). Defaults to `nvme0`
+  so a single-controller VM does not have to type it. Same mapping as
+  `info nvme [name]` — a leading `/` is treated as a canonical QOM path,
+  anything else is rewritten as `/machine/peripheral/<name>`.
 
 The delay only affects completion posting; the command itself is
 fetched and executed normally. Its real service time is preserved, so

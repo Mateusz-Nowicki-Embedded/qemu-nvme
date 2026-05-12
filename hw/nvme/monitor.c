@@ -229,7 +229,7 @@ void hmp_nvme_completion_delay(Monitor *mon, const QDict *qdict)
     int64_t sqid = qdict_get_int(qdict, "sqid");
     int64_t delay_ms = qdict_get_int(qdict, "delay_ms");
     const char *name = qdict_get_try_str(qdict, "name");
-    g_autofree char *path = nvme_canonical_path(name);
+    g_autofree char *path = nvme_canonical_path(name ? name : "nvme0");
     SetSqDelayCtx ctx;
 
     if (sqid < 0 || sqid > UINT16_MAX) {
@@ -250,22 +250,15 @@ void hmp_nvme_completion_delay(Monitor *mon, const QDict *qdict)
                                    set_sq_delay_one, &ctx);
 
     if (ctx.matched == 0) {
-        if (path) {
-            monitor_printf(mon,
-                           "no NVMe SQ with sqid=%" PRId64 " at %s\n",
-                           sqid, path);
-        } else {
-            monitor_printf(mon,
-                           "no NVMe SQ with sqid=%" PRId64 " found\n",
-                           sqid);
-        }
+        monitor_printf(mon, "no NVMe SQ with sqid=%" PRId64 " at %s\n",
+                       sqid, path);
         return;
     }
 
     monitor_printf(mon,
                    "nvme_completion_delay: sqid=%" PRId64
-                   " delay_ms=%" PRId64 "\n",
-                   sqid, delay_ms);
+                   " delay_ms=%" PRId64 " on %s\n",
+                   sqid, delay_ms, path);
 }
 
 void hmp_info_nvme(Monitor *mon, const QDict *qdict)

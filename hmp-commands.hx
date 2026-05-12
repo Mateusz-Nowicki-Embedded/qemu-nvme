@@ -1507,7 +1507,7 @@ ERST
         .args_type  = "sqid:i,delay_ms:i,name:s?",
         .params     = "sqid delay_ms [name]",
         .help       = "set artificial completion delay (ms) for an NVMe SQ; "
-                      "with [name] (e.g. 'nvme0'), only that controller",
+                      "[name] selects a controller (default: nvme0)",
         .cmd        = hmp_nvme_completion_delay,
     },
 
@@ -1516,8 +1516,10 @@ SRST
   Hold each completion for commands submitted on the NVMe SQ with the given
   *sqid* until at least *delay_ms* milliseconds have elapsed since the
   command finished executing.  ``0`` disables the delay.  Optional *name*
-  (e.g. ``nvme0``) restricts the change to that controller; a leading
-  ``/`` is treated as a canonical QOM path.
+  selects which controller to configure; it defaults to ``nvme0`` so a
+  single-controller VM does not have to type it.  A leading ``/`` is
+  treated as a canonical QOM path; everything else is rewritten as
+  ``/machine/peripheral/<name>``.
 ERST
 
     {
