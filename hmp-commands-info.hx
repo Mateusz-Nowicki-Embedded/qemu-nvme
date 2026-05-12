@@ -342,30 +342,35 @@ ERST
 
     {
         .name       = "nvme",
-        .args_type  = "",
-        .params     = "",
-        .help       = "show emulated NVMe controllers",
-        .cmd_info_hrt = qmp_x_query_nvme,
+        .args_type  = "name:s?",
+        .params     = "[name]",
+        .help       = "show emulated NVMe controllers; "
+                      "with [name] (e.g. 'nvme0'), only that controller",
+        .cmd        = hmp_info_nvme,
     },
 
 SRST
-  ``info nvme``
-    Show emulated NVMe controllers.
+  ``info nvme`` [*name*]
+    Show emulated NVMe controllers.  Optional *name* (e.g. ``nvme0``)
+    restricts output to that controller; a leading ``/`` is treated
+    as a canonical QOM path.
 ERST
 
     {
         .name       = "nvme-queues",
-        .args_type  = "",
-        .params     = "",
-        .help       = "show active NVMe queues and their doorbells",
-        .cmd_info_hrt = qmp_x_query_nvme_queues,
+        .args_type  = "name:s?",
+        .params     = "[name]",
+        .help       = "show active NVMe queues and their doorbells; "
+                      "with [name] (e.g. 'nvme0'), only that controller",
+        .cmd        = hmp_info_nvme_queues,
     },
 
 SRST
-  ``info nvme-queues``
+  ``info nvme-queues`` [*name*]
     Show all active NVMe submission and completion queues, including
     head/tail, DMA address of the ring and BAR0-relative doorbell
-    offset.
+    offset.  Optional *name* (e.g. ``nvme0``) restricts output to that
+    controller; a leading ``/`` is treated as a canonical QOM path.
 ERST
 
     {

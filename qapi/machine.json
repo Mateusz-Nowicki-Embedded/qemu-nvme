@@ -1777,6 +1777,10 @@
 #
 # Query state of emulated NVMe controllers.
 #
+# @path: optional canonical QOM path of a single controller
+#     (e.g. ``/machine/peripheral/nvme0``).  If omitted, all NVMe
+#     controllers in the machine are reported.
+#
 # Features:
 #
 # @unstable: This command is meant for debugging.
@@ -1786,6 +1790,7 @@
 # Since: 11.1
 ##
 { 'command': 'x-query-nvme',
+  'data': { '*path': 'str' },
   'returns': 'HumanReadableText',
   'features': [ 'unstable' ] }
 
@@ -1793,6 +1798,10 @@
 # @x-query-nvme-queues:
 #
 # Query state of all active SQ/CQ for emulated NVMe controllers.
+#
+# @path: optional canonical QOM path of a single controller
+#     (e.g. ``/machine/peripheral/nvme0``).  If omitted, queues
+#     for all NVMe controllers in the machine are reported.
 #
 # Features:
 #
@@ -1803,6 +1812,7 @@
 # Since: 11.1
 ##
 { 'command': 'x-query-nvme-queues',
+  'data': { '*path': 'str' },
   'returns': 'HumanReadableText',
   'features': [ 'unstable' ] }
 

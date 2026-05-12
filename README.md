@@ -16,6 +16,11 @@ without attaching gdb to QEMU.
   ring's PRP1, the BAR0-relative doorbell offset (`SQyTDBL` / `CQyHDBL`)
   and the CQ phase tag.
 
+Both commands accept an optional controller name (e.g. `info nvme nvme0`).
+The name maps to `/machine/peripheral/<name>`; a value starting with `/`
+is taken verbatim as a canonical QOM path. When omitted, all NVMe
+controllers in the machine are reported.
+
 ```
 (qemu) info nvme
 /machine/peripheral-anon/device[0]
@@ -48,7 +53,7 @@ held back by *delay_ms* milliseconds, counted from the moment the
 controller finished executing it.
 
 ```
-(qemu) nvme_completion_delay <sqid> <delay_ms>
+(qemu) nvme_completion_delay <sqid> <delay_ms> [<name>]
 ```
 
 * *sqid* — Submission Queue ID. `0` is the admin queue. I/O SQ IDs
@@ -56,6 +61,9 @@ controller finished executing it.
   allocated.
 * *delay_ms* — delay in milliseconds. `0` disables the delay on that
   SQ.
+* *name* — optional controller name (e.g. `nvme0`). When omitted, the
+  setting is applied to **every** NVMe controller in the machine.
+  Same name mapping as `info nvme [name]`.
 
 The delay only affects completion posting; the command itself is
 fetched and executed normally. Its real service time is preserved, so

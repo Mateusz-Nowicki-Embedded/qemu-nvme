@@ -1504,17 +1504,20 @@ ERST
 
     {
         .name       = "nvme_completion_delay",
-        .args_type  = "sqid:i,delay_ms:i",
-        .params     = "sqid delay_ms",
-        .help       = "set artificial completion delay (ms) for an NVMe SQ",
+        .args_type  = "sqid:i,delay_ms:i,name:s?",
+        .params     = "sqid delay_ms [name]",
+        .help       = "set artificial completion delay (ms) for an NVMe SQ; "
+                      "with [name] (e.g. 'nvme0'), only that controller",
         .cmd        = hmp_nvme_completion_delay,
     },
 
 SRST
-``nvme_completion_delay`` *sqid* *delay_ms*
+``nvme_completion_delay`` *sqid* *delay_ms* [*name*]
   Hold each completion for commands submitted on the NVMe SQ with the given
   *sqid* until at least *delay_ms* milliseconds have elapsed since the
-  command finished executing.  ``0`` disables the delay.
+  command finished executing.  ``0`` disables the delay.  Optional *name*
+  (e.g. ``nvme0``) restricts the change to that controller; a leading
+  ``/`` is treated as a canonical QOM path.
 ERST
 
     {
